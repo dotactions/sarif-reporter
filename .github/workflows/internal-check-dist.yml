@@ -22,7 +22,7 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      - uses: ./setup-node
+      - uses: dotactions/node/setup@b0c3e28364e85d1a9c29a3556779c046fd77918c # v0.1.1
         with:
           node-version: "24"
 
