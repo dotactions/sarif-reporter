@@ -19,6 +19,7 @@ interface IssueComment {
 interface GitHubIssue {
     number: number;
     body?: string;
+    pull_request?: unknown;
 }
 
 function escapeTableCell(val: unknown): string {
@@ -27,26 +28,6 @@ function escapeTableCell(val: unknown): string {
         .replace(/\|/g, "\\|")
         .replace(/</g, "&lt;")
         .replace(/>/g, "&gt;");
-}
-
-async function fetchAllComments(
-    apiBase: string,
-    prNumber: number,
-    headers: HeadersInit,
-): Promise<IssueComment[]> {
-    const allComments: IssueComment[] = [];
-    for (let page = 1; page <= 3; page++) {
-        const res = await fetch(
-            `${apiBase}/issues/${prNumber}/comments?per_page=100&page=${page}`,
-            { headers },
-        );
-        if (!res.ok) break;
-        const data = (await res.json()) as IssueComment[];
-        if (!Array.isArray(data) || data.length === 0) break;
-        allComments.push(...data);
-        if (data.length < 100) break;
-    }
-    return allComments;
 }
 
 async function run(): Promise<void> {
@@ -174,6 +155,7 @@ async function run(): Promise<void> {
     core.setOutput("report-file", reportFile);
 
     const repo = process.env.GITHUB_REPOSITORY;
+    const apiBase = `https://api.github.com/repos/${repo}`;
     const headers = {
         Authorization: `Bearer ${token}`,
         Accept: "application/vnd.github+json",
@@ -181,44 +163,57 @@ async function run(): Promise<void> {
         "X-GitHub-Api-Version": "2022-11-28",
     };
 
-    let prNumber: number | null = null;
-    if (
-        process.env.GITHUB_EVENT_PATH &&
-        fs.existsSync(process.env.GITHUB_EVENT_PATH)
-    ) {
-        try {
-            const eventData = JSON.parse(
-                fs.readFileSync(process.env.GITHUB_EVENT_PATH, "utf8"),
+    async function gh<T>(url: string, init: RequestInit = {}): Promise<T> {
+        const res = await fetch(url, {
+            ...init,
+            headers: { ...headers, "Content-Type": "application/json" },
+        });
+        if (!res.ok)
+            throw new Error(
+                `${init.method ?? "GET"} ${url} → ${res.status}: ${(await res.text()).slice(0, 200)}`,
             );
-            prNumber =
-                eventData.pull_request?.number ||
-                eventData.issue?.number ||
-                null;
-        } catch (err: unknown) {
-            core.warning(
-                `Could not read GITHUB_EVENT_PATH: ${err instanceof Error ? err.message : String(err)}. Skipping PR comment.`,
-            );
-        }
+        return (res.status === 204 ? undefined : await res.json()) as T;
     }
+
+    let eventData: {
+        pull_request?: { number?: number };
+        issue?: { number?: number };
+        repository?: { default_branch?: string };
+    } = {};
+    try {
+        eventData = JSON.parse(
+            fs.readFileSync(process.env.GITHUB_EVENT_PATH ?? "", "utf8"),
+        );
+    } catch {
+        core.info("No readable GITHUB_EVENT_PATH; skipping PR comment.");
+    }
+    const prNumber =
+        eventData.pull_request?.number || eventData.issue?.number || null;
 
     if (prNumber && token && repo) {
         const marker = `<!-- security-report-${commentTag} -->`;
-        const apiBase = `https://api.github.com/repos/${repo}`;
         try {
-            const comments = await fetchAllComments(apiBase, prNumber, headers);
-            const existing = comments.find((c) => c.body?.includes(marker));
-            const url = existing
-                ? `${apiBase}/issues/comments/${existing.id}`
-                : `${apiBase}/issues/${prNumber}/comments`;
-            const res = await fetch(url, {
-                method: existing ? "PATCH" : "POST",
-                headers: { ...headers, "Content-Type": "application/json" },
-                body: JSON.stringify({ body: md }),
-            });
-            if (res.ok)
-                core.info(
-                    `${existing ? "Updated" : "Created"} PR comment on #${prNumber}`,
+            const comments: IssueComment[] = [];
+            for (let page = 1; page <= 3; page++) {
+                const batch = await gh<IssueComment[]>(
+                    `${apiBase}/issues/${prNumber}/comments?per_page=100&page=${page}`,
                 );
+                comments.push(...batch);
+                if (batch.length < 100) break;
+            }
+            const existing = comments.find((c) => c.body?.includes(marker));
+            await gh(
+                existing
+                    ? `${apiBase}/issues/comments/${existing.id}`
+                    : `${apiBase}/issues/${prNumber}/comments`,
+                {
+                    method: existing ? "PATCH" : "POST",
+                    body: JSON.stringify({ body: md }),
+                },
+            );
+            core.info(
+                `${existing ? "Updated" : "Created"} PR comment on #${prNumber}`,
+            );
         } catch (err: unknown) {
             core.warning(
                 `PR comment upsert failed: ${err instanceof Error ? err.message : String(err)}`,
@@ -226,87 +221,70 @@ async function run(): Promise<void> {
         }
     }
 
-    if (shouldManageIssue && token && repo) {
-        const apiBase = `https://api.github.com/repos/${repo}`;
+    // A PR or feature-branch scan must not open or close the default branch's tracking issue.
+    const onDefaultBranch =
+        !!eventData.repository?.default_branch &&
+        process.env.GITHUB_REF ===
+            `refs/heads/${eventData.repository.default_branch}`;
+    const auditEvent = ["schedule", "push", "workflow_dispatch"].includes(
+        process.env.GITHUB_EVENT_NAME ?? "",
+    );
+    if (shouldManageIssue && !(onDefaultBranch && auditEvent)) {
+        core.warning(
+            "manage-issue ignored: it only runs on schedule, push or workflow_dispatch events on the default branch.",
+        );
+    } else if (shouldManageIssue && token && repo) {
         const issueMarker = `<!-- issue-tag-${commentTag} -->`;
         try {
-            const listRes = await fetch(
-                `${apiBase}/issues?state=open&labels=automated-audit`,
-                { headers },
-            );
-            if (listRes.ok) {
-                const issues = (await listRes.json()) as GitHubIssue[];
-                const existingIssue = Array.isArray(issues)
-                    ? issues.find((i) => i.body?.includes(issueMarker))
-                    : null;
-                const runUrl =
-                    process.env.GITHUB_SERVER_URL && process.env.GITHUB_RUN_ID
-                        ? `${process.env.GITHUB_SERVER_URL}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID}`
-                        : "";
-                const body = `## Automated Security Audit Alert\n\n${issueMarker}\n${md}\n\n---\n*Run: [${process.env.GITHUB_RUN_ID || "Workflow Run"}](${runUrl})*`;
+            // Matched by marker, not label: a removed label must not orphan the issue and open a duplicate.
+            // ponytail: scans at most 1000 open issues; store the issue number if repos exceed that.
+            let existingIssue: GitHubIssue | undefined;
+            for (let page = 1; page <= 10 && !existingIssue; page++) {
+                const batch = await gh<GitHubIssue[]>(
+                    `${apiBase}/issues?state=open&per_page=100&page=${page}`,
+                );
+                existingIssue = batch.find(
+                    (i) => !i.pull_request && i.body?.includes(issueMarker),
+                );
+                if (batch.length < 100) break;
+            }
+            const runUrl =
+                process.env.GITHUB_SERVER_URL && process.env.GITHUB_RUN_ID
+                    ? `${process.env.GITHUB_SERVER_URL}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID}`
+                    : "";
+            const body = `## Automated Security Audit Alert\n\n${issueMarker}\n${md}\n\n---\n*Run: [${process.env.GITHUB_RUN_ID || "Workflow Run"}](${runUrl})*`;
 
-                if (total > 0) {
-                    if (existingIssue) {
-                        await fetch(
-                            `${apiBase}/issues/${existingIssue.number}`,
-                            {
-                                method: "PATCH",
-                                headers: {
-                                    ...headers,
-                                    "Content-Type": "application/json",
-                                },
-                                body: JSON.stringify({ body }),
-                            },
-                        );
-                        core.info(
-                            `Updated open issue #${existingIssue.number}`,
-                        );
-                    } else {
-                        const createRes = await fetch(`${apiBase}/issues`, {
-                            method: "POST",
-                            headers: {
-                                ...headers,
-                                "Content-Type": "application/json",
-                            },
-                            body: JSON.stringify({
-                                title: issueTitle,
-                                body,
-                                labels: ["security", "automated-audit"],
-                            }),
-                        });
-                        if (createRes.ok) {
-                            const created =
-                                (await createRes.json()) as GitHubIssue;
-                            core.info(`Created new issue #${created.number}`);
-                        }
-                    }
-                } else if (existingIssue) {
-                    await fetch(
-                        `${apiBase}/issues/${existingIssue.number}/comments`,
-                        {
-                            method: "POST",
-                            headers: {
-                                ...headers,
-                                "Content-Type": "application/json",
-                            },
-                            body: JSON.stringify({
-                                body: "✅ **Resolved**: The latest security scan detected 0 vulnerabilities. Closing issue.",
-                            }),
-                        },
-                    );
-                    await fetch(`${apiBase}/issues/${existingIssue.number}`, {
-                        method: "PATCH",
-                        headers: {
-                            ...headers,
-                            "Content-Type": "application/json",
-                        },
-                        body: JSON.stringify({ state: "closed" }),
-                    });
-                    core.info(`Closed resolved issue #${existingIssue.number}`);
-                }
+            if (total > 0 && existingIssue) {
+                await gh(`${apiBase}/issues/${existingIssue.number}`, {
+                    method: "PATCH",
+                    body: JSON.stringify({ body }),
+                });
+                core.info(`Updated open issue #${existingIssue.number}`);
+            } else if (total > 0) {
+                const created = await gh<GitHubIssue>(`${apiBase}/issues`, {
+                    method: "POST",
+                    body: JSON.stringify({
+                        title: issueTitle,
+                        body,
+                        labels: ["security", "automated-audit"],
+                    }),
+                });
+                core.info(`Created new issue #${created.number}`);
+            } else if (existingIssue) {
+                await gh(`${apiBase}/issues/${existingIssue.number}/comments`, {
+                    method: "POST",
+                    body: JSON.stringify({
+                        body: "✅ **Resolved**: The latest security scan detected 0 vulnerabilities. Closing issue.",
+                    }),
+                });
+                await gh(`${apiBase}/issues/${existingIssue.number}`, {
+                    method: "PATCH",
+                    body: JSON.stringify({ state: "closed" }),
+                });
+                core.info(`Closed resolved issue #${existingIssue.number}`);
             }
         } catch (err: unknown) {
-            core.warning(
+            core.setFailed(
                 `Issue management failed: ${err instanceof Error ? err.message : String(err)}`,
             );
         }

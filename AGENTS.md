@@ -1,4 +1,4 @@
-# Agents Rules for dotactions/sarif-report
+# Agents Rules for dotactions/sarif-reporter
 
 A JavaScript action, listed on the GitHub Marketplace, that turns any SARIF file into a job summary with a badge and a sticky PR comment, and opens or closes a tracking issue for scheduled scans. Strangers depend on it, so correctness and API stability outrank convenience.
 

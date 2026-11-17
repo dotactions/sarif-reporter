@@ -3,15 +3,19 @@ name: Test Security Report
 on:
   pull_request:
     paths:
-      - "security-report/**"
+      - "src/**"
+      - "dist/**"
+      - "action.yml"
       - "tests/fixtures/*.sarif"
-      - ".github/workflows/internal-test-security-report.yml"
+      - ".github/workflows/internal-test.yml"
   push:
     branches: [main]
     paths:
-      - "security-report/**"
+      - "src/**"
+      - "dist/**"
+      - "action.yml"
       - "tests/fixtures/*.sarif"
-      - ".github/workflows/internal-test-security-report.yml"
+      - ".github/workflows/internal-test.yml"
   workflow_dispatch:
 
 permissions:
@@ -27,10 +31,9 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
 
-      # First test if a clean report with no findings works as expected
       - name: Run security-report with clean fixture
         id: report-clean
-        uses: ./security-report
+        uses: ./
         with:
           title: "Clean Security Report"
           sarif-file: "tests/fixtures/clean.sarif"
@@ -49,10 +52,9 @@ jobs:
           fi
           grep -q "Passed ✅" "$REPORT_FILE"
 
-      # Then test if a report with vulns is working
       - name: Run security-report with dirty fixture
         id: report-dirty
-        uses: ./security-report
+        uses: ./
         with:
           title: "Dirty Security Report"
           sarif-file: "tests/fixtures/dirty.sarif"
@@ -70,3 +72,13 @@ jobs:
             exit 1
           fi
           test -f "$REPORT_FILE"
+
+      # The job has no issues: write, so if the default-branch guard fails to skip, the API 403 fails this step.
+      - name: Run security-report with manage-issue on a PR
+        id: report-guard
+        if: github.event_name == 'pull_request'
+        uses: ./
+        with:
+          sarif-file: "tests/fixtures/dirty.sarif"
+          comment-tag: "test-guard"
+          manage-issue: "true"
