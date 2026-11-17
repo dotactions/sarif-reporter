@@ -27,7 +27,7 @@ A JavaScript action, listed on the GitHub Marketplace, that turns any SARIF file
 | Path | Purpose |
 | :--- | :--- |
 | `action.yml` | The action. Must stay at the repo root (Marketplace requirement) |
-| `src/` → `dist/index.js` | TypeScript source, bundled by `tsup` into committed `dist/` |
+| `src/` → `dist/index.cjs` | TypeScript source, bundled by `tsup` into committed `dist/` |
 | `README.md` | Also the Marketplace listing page |
 | `.github/workflows/internal-test.yml` | Tests the action via `uses: ./` against `tests/fixtures/*.sarif` |
 | `.github/workflows/internal-check-dist.yml` | Fails when `dist/` drifts from `src/` |

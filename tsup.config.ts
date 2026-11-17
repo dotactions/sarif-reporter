@@ -8,7 +8,7 @@ export default defineConfig({
     platform: "node",
     target: "node24",
     outDir: ".",
-    outExtension: () => ({ js: ".js" }),
+    outExtension: () => ({ js: ".cjs" }),
     bundle: true,
     splitting: false,
     clean: false,

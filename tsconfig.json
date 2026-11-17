@@ -6,8 +6,9 @@
         "strict": true,
         "esModuleInterop": true,
         "skipLibCheck": true,
+        "types": ["node"],
         "forceConsistentCasingInFileNames": true,
         "noEmit": true
     },
-    "include": ["security-report/src/**/*", "tsup.config.ts"]
+    "include": ["src/**/*", "tsup.config.ts"]
 }
