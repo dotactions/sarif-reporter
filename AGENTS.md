@@ -38,11 +38,11 @@ A JavaScript action, listed on the GitHub Marketplace, that turns any SARIF file
 
 - Every third-party `uses:` is pinned to a full commit SHA with a version comment: `uses: owner/repo@<40-char-sha> # vX.Y.Z`. Resolve SHAs with `git ls-remote --tags`; never guess or invent one. If you cannot resolve it, stop and ask.
 - Another `dotactions` repo is pinned the same way, to the commit of its **release tag** (`git ls-remote https://github.com/dotactions/<repo> 'refs/tags/vX.Y.Z^{}'`), never to a `main` SHA: only release commits have their own `@main` self-references rewritten. `internal-check-refs.yml` fails on anything else.
-- This repo's only action is the root one, tested via `uses: ./`. It has no `@main` self-references.
+- This repo's only action is the root one, tested via `uses: ./`. It must never contain `@main` self-references: releases tag a plain `main` commit (see [Public API & Versioning](#public-api--versioning)), so nothing rewrites them.
 
 ## Shared CI (`dotactions/tooling`)
 
-- `internal-release.yml`, `internal-check-refs.yml`, `internal-actionlint.yml`, `internal-lint.yml` are thin callers of `dotactions/tooling/.github/workflows/*.yml`. They only hold `on:`/`paths:`, `permissions:` and `with:`. Logic changes go to `tooling`, not here.
+- `internal-floating-tags.yml`, `internal-check-refs.yml`, `internal-actionlint.yml` are thin callers of `dotactions/tooling/.github/workflows/*.yml`. They only hold `on:`/`paths:`, `permissions:` and `with:`. Logic changes go to `tooling`, not here.
 - Callers never declare `concurrency:`; the called workflow does, and an identical group in caller and callee deadlocks.
 
 ## Security
@@ -61,7 +61,7 @@ A JavaScript action, listed on the GitHub Marketplace, that turns any SARIF file
 
 - Inputs, outputs, input defaults, the comment marker (`comment-tag`) format and the issue title/body matching are public API. Changing any of them is a **breaking change**: flag it explicitly so the human can bump the major version.
 - Every public input/output change must be reflected in `README.md` (tables + usage examples).
-- Releases are cut only by the human via the `Release` workflow (`internal-release.yml`), which also publishes to the Marketplace. Never create or move tags.
+- Releases are cut only by the human in the GitHub UI (**Releases → Draft a new release**, with **Publish this Action to the GitHub Marketplace** ticked), because the Marketplace checkbox only exists there. There is deliberately no `internal-release.yml`; never add one. `internal-floating-tags.yml` moves `v1` on `release: published`. Never create or move tags yourself.
 
 ## Testing
 

@@ -1,0 +1,16 @@
+name: Floating Tags
+
+on:
+  release:
+    types: [published]
+
+permissions:
+  contents: read
+
+jobs:
+  floating-tags:
+    uses: dotactions/tooling/.github/workflows/floating-tags.yml@195e9ff7bbf3476b7fd9a9e3d9c05554c3b37fb5 # v1.2.1
+    with:
+      version: ${{ github.event.release.tag_name }}
+    secrets:
+      RELEASE_APP_PRIVATE_KEY: ${{ secrets.RELEASE_APP_PRIVATE_KEY }}

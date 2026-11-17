@@ -67,7 +67,7 @@ uses: dotactions/sarif-reporter@<40-char-sha> # v1.0.0
 uses: dotactions/sarif-reporter@v1
 ```
 
-Resolve a SHA with `git ls-remote https://github.com/dotactions/sarif-reporter 'refs/tags/v1.0.0^{}'`. Only SHAs of **release tags** pin the whole tree; a SHA from `main` still contains `@main` self-references.
+Resolve a SHA with `git ls-remote https://github.com/dotactions/sarif-reporter 'refs/tags/v1.0.0^{}'`. Pin release-tag SHAs, not `main` SHAs.
 
 | Ref | Moves on | Use |
 | :-- | :-- | :-- |
@@ -79,10 +79,12 @@ Release notes: [GitHub Releases](https://github.com/dotactions/sarif-reporter/re
 
 ## Releasing (maintainers)
 
-1. Merge to `main` with conventional-commit PR titles; they become the release notes.
-2. Go to **Actions → Release → Run workflow** on `main` and enter a version: `1.1.0`, or `1.1.0-rc.1` for a pre-release that moves no floating tags.
-3. First release only: edit the release the workflow created and tick **Publish this Action to the GitHub Marketplace** (this option is only in the web UI). Later releases are listed automatically.
+This action is listed on the GitHub Marketplace, so releases are made in the web UI (the Marketplace checkbox only exists there), not with a Release workflow.
 
-Don't use **Releases → Draft a new release**: it doesn't move the floating tags, and doesn't rewrite `@main` self-references if this repo ever gains them. The workflow (`internal-release.yml`, which calls [dotactions/tooling](https://github.com/dotactions/tooling)) does both, then creates the GitHub release with generated notes.
+1. Merge to `main` with conventional-commit PR titles; they become the release notes.
+2. Go to **Releases → Draft a new release**, create the tag `vX.Y.Z` on `main`, click **Generate release notes**, tick **Publish this Action to the GitHub Marketplace** and publish. For a pre-release (`vX.Y.Z-rc.1`), tick **Set as a pre-release** instead.
+3. `internal-floating-tags.yml` then moves `v1` to the new tag (forward only; pre-releases move nothing).
+
+The tagged commit is the plain `main` commit, so `dist/` must be up to date there (`internal-check-dist.yml` guards that) and the repo must never gain `@main` self-references: nothing rewrites them.
 
 Bump the **major** version for breaking changes, the **minor** for features, the **patch** for fixes.
