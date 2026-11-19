@@ -36,6 +36,10 @@ inputs:
     description: Title of the automated GitHub Issue
     required: false
     default: "[Security Audit] Active Vulnerabilities Detected"
+  post-comment:
+    description: Whether to create or update the sticky PR comment on pull request events
+    required: false
+    default: "true"
 
 outputs:
   total-findings:

@@ -3,7 +3,7 @@
 Turns any SARIF file (Trivy, Semgrep, CodeQL, Grype, …) into readable feedback, without GitHub Advanced Security:
 
 - **Tracking issue for scheduled scans**: with `manage-issue`, one issue is opened when findings appear, updated while they persist, and closed when they're gone. Nightly scans have no PR to comment on; this is where their results go. It only acts on `schedule`, `push` and `workflow_dispatch` runs on the default branch (anything else logs a warning and skips), finds its issue by a hidden marker derived from `comment-tag` (removing the label doesn't orphan it), and fails the step if a GitHub API call fails.
-- **Sticky PR comment**: one comment per `comment-tag`, updated in place on every push.
+- **Sticky PR comment**: one comment per `comment-tag`, updated in place on every push. Turn it off with `post-comment: "false"` (e.g. for test or matrix runs) and keep the job summary.
 - **Job summary** with a shields.io badge and a findings table.
 - Optionally **fails the job** on findings.
 
@@ -50,6 +50,7 @@ permissions:
 | `fail-on-findings` | Fail step if findings are detected                    | No       | `"false"`                                            |
 | `manage-issue`     | Create/update/close issue; default-branch audits only | No       | `"false"`                                            |
 | `issue-title`      | Title of automated GitHub issue                       | No       | `"[Security Audit] Active Vulnerabilities Detected"` |
+| `post-comment`     | Create/update the sticky PR comment on PR events      | No       | `"true"`                                             |
 
 ## Outputs
 

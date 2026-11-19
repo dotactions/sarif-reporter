@@ -2,6 +2,7 @@ import fs from "node:fs";
 import path from "node:path";
 import * as core from "@actions/core";
 import type { Log as SarifLog } from "sarif";
+import { upsertPrComment } from "./comment.js";
 
 interface Finding {
     ruleId: string;
@@ -9,11 +10,6 @@ interface Finding {
     file: string;
     line: number;
     message: string;
-}
-
-interface IssueComment {
-    id: number;
-    body?: string;
 }
 
 interface GitHubIssue {
@@ -39,6 +35,8 @@ async function run(): Promise<void> {
         core.getInput("github-token") || process.env.GITHUB_TOKEN || "";
     const failOnFindings = core.getInput("fail-on-findings") === "true";
     const shouldManageIssue = core.getInput("manage-issue") === "true";
+    // why: getBooleanInput fails on anything but true/false, so a typo can't silently keep comments on
+    const postComment = core.getBooleanInput("post-comment");
     const issueTitle =
         core.getInput("issue-title") ||
         "[Security Audit] Active Vulnerabilities Detected";
@@ -190,35 +188,8 @@ async function run(): Promise<void> {
     const prNumber =
         eventData.pull_request?.number || eventData.issue?.number || null;
 
-    if (prNumber && token && repo) {
-        const marker = `<!-- security-report-${commentTag} -->`;
-        try {
-            const comments: IssueComment[] = [];
-            for (let page = 1; page <= 3; page++) {
-                const batch = await gh<IssueComment[]>(
-                    `${apiBase}/issues/${prNumber}/comments?per_page=100&page=${page}`,
-                );
-                comments.push(...batch);
-                if (batch.length < 100) break;
-            }
-            const existing = comments.find((c) => c.body?.includes(marker));
-            await gh(
-                existing
-                    ? `${apiBase}/issues/comments/${existing.id}`
-                    : `${apiBase}/issues/${prNumber}/comments`,
-                {
-                    method: existing ? "PATCH" : "POST",
-                    body: JSON.stringify({ body: md }),
-                },
-            );
-            core.info(
-                `${existing ? "Updated" : "Created"} PR comment on #${prNumber}`,
-            );
-        } catch (err: unknown) {
-            core.warning(
-                `PR comment upsert failed: ${err instanceof Error ? err.message : String(err)}`,
-            );
-        }
+    if (postComment && prNumber && token && repo) {
+        await upsertPrComment(gh, apiBase, prNumber, commentTag, md);
     }
 
     // A PR or feature-branch scan must not open or close the default branch's tracking issue.

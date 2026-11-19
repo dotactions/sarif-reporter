@@ -73,6 +73,38 @@ jobs:
           fi
           test -f "$REPORT_FILE"
 
+      - name: Run security-report with an invalid post-comment value
+        id: report-invalid-comment
+        continue-on-error: true
+        uses: ./
+        with:
+          sarif-file: "tests/fixtures/dirty.sarif"
+          comment-tag: "test-invalid-comment"
+          post-comment: "no"
+
+      - name: Assert invalid post-comment is rejected
+        shell: bash
+        env:
+          OUTCOME: ${{ steps.report-invalid-comment.outcome }}
+        run: '[ "$OUTCOME" = failure ] || { echo "Expected failure, got $OUTCOME"; exit 1; }'
+
+      - name: Run security-report with post-comment disabled
+        id: report-no-comment
+        uses: ./
+        with:
+          sarif-file: "tests/fixtures/dirty.sarif"
+          comment-tag: "test-no-comment"
+          post-comment: "false"
+
+      - name: Assert summary is still produced without a comment
+        shell: bash
+        env:
+          TOTAL: ${{ steps.report-no-comment.outputs.total-findings }}
+          REPORT_FILE: ${{ steps.report-no-comment.outputs.report-file }}
+        run: |
+          [ "$TOTAL" -eq 2 ] || { echo "Expected 2 findings, got $TOTAL"; exit 1; }
+          test -f "$REPORT_FILE"
+
       # The job has no issues: write, so if the default-branch guard fails to skip, the API 403 fails this step.
       - name: Run security-report with manage-issue on a PR
         id: report-guard
