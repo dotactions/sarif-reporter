@@ -111,13 +111,8 @@ async function run(): Promise<void> {
     const badgeUrl = `https://img.shields.io/badge/${encodeURIComponent(badgeLabel)}-${total}_issues-${badgeColor}`;
 
     let md = `<!-- security-report-${commentTag} -->\n`;
-    md += `### ${title}: ${total === 0 ? "Passed ✅" : `${total} issue${total === 1 ? "" : "s"} detected ⚠️`}\n\n`;
+    md += `### ${title}: ${total === 0 ? "Passed ✅" : `${total} issue${total === 1 ? "" : "s"} detected ⚠️ (🔴 ${counts.error} · 🟡 ${counts.warning} · 🟢 ${counts.note})`}\n\n`;
     md += `![${badgeLabel}](${badgeUrl})\n\n`;
-    md += `| Severity | Count |\n| :--- | :--- |\n`;
-    md += `| 🔴 Error / High | ${counts.error} |\n`;
-    md += `| 🟡 Warning / Medium | ${counts.warning} |\n`;
-    md += `| 🟢 Note / Low | ${counts.note} |\n`;
-    md += `| **Total** | **${total}** |\n\n`;
 
     if (total === 0) {
         md += `> ✅ No security vulnerabilities or policy violations detected.\n`;

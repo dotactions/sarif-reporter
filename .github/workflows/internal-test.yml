@@ -71,7 +71,11 @@ jobs:
             echo "Expected 2 findings, got $TOTAL"
             exit 1
           fi
-          test -f "$REPORT_FILE"
+          grep -q "2 issues detected ⚠️ (🔴 1 · 🟡 1 · 🟢 0)" "$REPORT_FILE"
+          if grep -q "| Severity | Count |" "$REPORT_FILE"; then
+            echo "Severity count table should be gone"
+            exit 1
+          fi
 
       - name: Run security-report with an invalid post-comment value
         id: report-invalid-comment
