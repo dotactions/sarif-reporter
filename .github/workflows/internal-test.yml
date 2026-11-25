@@ -72,6 +72,7 @@ jobs:
             exit 1
           fi
           grep -q "2 issues detected ⚠️ (🔴 1 · 🟡 1 · 🟢 0)" "$REPORT_FILE"
+          grep -qE '^\*Updated [0-9]{4}-[0-9]{2}-[0-9]{2} [0-9]{2}:[0-9]{2} UTC by \[Test Security Report #[0-9]+\]\(https://[^)]+/actions/runs/[0-9]+\)\*$' "$REPORT_FILE"
           if grep -q "| Severity | Count |" "$REPORT_FILE"; then
             echo "Severity count table should be gone"
             exit 1

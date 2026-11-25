@@ -138,7 +138,15 @@ async function run(): Promise<void> {
         md += `\n</details>\n`;
     }
 
-    md += `\n*Last updated: ${new Date().toISOString()}*\n`;
+    const repo = process.env.GITHUB_REPOSITORY;
+    const runUrl =
+        process.env.GITHUB_SERVER_URL && repo && process.env.GITHUB_RUN_ID
+            ? `${process.env.GITHUB_SERVER_URL}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID}`
+            : "";
+    // why: the name lands inside link text and italics, where ] * _ ` would break the markdown
+    const runLabel = `${process.env.GITHUB_WORKFLOW?.replace(/[\\[\]*_`]/g, "\\$&") || "run"} #${process.env.GITHUB_RUN_NUMBER || process.env.GITHUB_RUN_ID}`;
+    const updatedAt = `${new Date().toISOString().slice(0, 16).replace("T", " ")} UTC`;
+    md += `\n*Updated ${updatedAt}${runUrl ? ` by [${runLabel}](${runUrl})` : ""}*\n`;
 
     const reportFile = path.resolve(process.cwd(), `${commentTag}-summary.md`);
     fs.writeFileSync(reportFile, md, "utf8");
@@ -147,7 +155,6 @@ async function run(): Promise<void> {
     core.setOutput("total-findings", total);
     core.setOutput("report-file", reportFile);
 
-    const repo = process.env.GITHUB_REPOSITORY;
     const apiBase = `https://api.github.com/repos/${repo}`;
     const headers = {
         Authorization: `Bearer ${token}`,
@@ -214,11 +221,7 @@ async function run(): Promise<void> {
                 );
                 if (batch.length < 100) break;
             }
-            const runUrl =
-                process.env.GITHUB_SERVER_URL && process.env.GITHUB_RUN_ID
-                    ? `${process.env.GITHUB_SERVER_URL}/${repo}/actions/runs/${process.env.GITHUB_RUN_ID}`
-                    : "";
-            const body = `## Automated Security Audit Alert\n\n${issueMarker}\n${md}\n\n---\n*Run: [${process.env.GITHUB_RUN_ID || "Workflow Run"}](${runUrl})*`;
+            const body = `## Automated Security Audit Alert\n\n${issueMarker}\n${md}`;
 
             if (total > 0 && existingIssue) {
                 await gh(`${apiBase}/issues/${existingIssue.number}`, {
